@@ -1,0 +1,32 @@
+Package: Immutables
+Type: Package
+Title: Fast and Functional Data Structures
+URL: https://oneilsh.github.io/immutables/,
+        https://github.com/oneilsh/immutables
+BugReports: https://github.com/oneilsh/immutables/issues
+Version: 1.0.1
+Authors@R: c(
+    person(given = "Shawn T.", family = "O'Neil", email = "shawn@tislab.org", role = c("aut", "cre"))
+  )
+Description: Provides fast, side-effect free data structures, including
+    catenable named lists, priority queues, double-ended queues, ordered
+    sequences, and interval indices. Implementation is based on the
+    finger-tree data structure of Hinze and Paterson (2006)
+    <doi:10.1017/S0956796805005769>.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports: coro, Rcpp, lambda.r
+LinkingTo: Rcpp
+Suggests: covr, ggplot2, ggtext, igraph, IRanges, knitr,
+        microbenchmark, pkgdown, pkgload, rmarkdown, rprojroot,
+        rstackdeque, rticles, S4Vectors, scales, testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+RoxygenNote: 7.3.3
+NeedsCompilation: yes
+Packaged: 2026-04-27 14:22:04 UTC; oneilsh
+Author: Shawn T. O'Neil [aut, cre]
+Maintainer: Shawn T. O'Neil <shawn@tislab.org>
+Repository: CRAN
+Date/Publication: 2026-04-28 20:10:13 UTC

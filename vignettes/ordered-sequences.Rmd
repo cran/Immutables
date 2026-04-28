@@ -1,0 +1,177 @@
+---
+title: "Ordered Sequences"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Ordered Sequences}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+if(requireNamespace("pkgload", quietly = TRUE)) {
+  pkgload::load_all(".", quiet = TRUE)
+} else if(requireNamespace("Immutables", quietly = TRUE)) {
+  library(Immutables)
+} else {
+  stop("Need either installed 'Immutables' or the 'pkgload' package to render this vignette.")
+}
+```
+
+## Ordered sequence basics
+
+`ordered_sequence` is a persistent structure that associates elements with keys, typically numeric or character (string). They store elements sorted by key, with stable first-in-first-out (FIFO) behavior for duplicate keys, and provide fast key-based lookup, range queries over keys, and insertion.
+
+All operations are persistent, and return modified copies. Peeking by key returns the stored element (which may be any type), popping returns a list with `$value` containing the stored element, `$key` the key, and `$remaining` the rest of the sequence without that element.
+
+```{r}
+xs <- ordered_sequence("a1", "b1", "b2", "c1", keys = c(1, 2, 2, 3))
+xs
+```
+
+The `as_ordered_sequence()` variant builds a sequence from a vector or list of elements paired with a key vector, useful when keys are already in a separate vector.
+
+```{r}
+xs2 <- as_ordered_sequence(c(3, 1, 2, 1), keys = letters[1:4])
+xs2
+```
+
+`as_flexseq(xs)` returns a payload-only `flexseq`; keys and any custom monoids are dropped (see `as.list` to convert and 
+preservekey metadata).
+
+
+## Peek, pop, insert, and range query by key
+
+Insertion is by key, and *keys may be duplicated*. 
+
+```{r}
+seq <- as_ordered_sequence(1:3, keys = letters[1:3])
+seq2 <- insert(seq, 10, key = "b")
+seq2
+```
+
+`pop_key()` removes and returns the first match for a key as `$value`/`$key`/`$remaining`. Its "all" counterpart `pop_all_key()` removes the entire tie run for that key, returning `$elements` (an ordered sequence of removed matches) and `$remaining`.
+
+```{r}
+one <- pop_key(seq, key = "b")
+one$value
+one$key
+one$remaining
+
+all_two <- pop_all_key(seq, "b")
+all_two$elements
+all_two$remaining
+```
+
+Keys may be counted, and elements accessed; `peek_key()` returns one element, the
+first in insertion order. `peek_all_key()` returns an ordered sequence with all
+matching keys.
+
+```{r}
+count_key(seq, key = "b")
+peek_key(seq, key = "b")
+peek_all_key(seq, key = "b")
+```
+
+Counting and accessing elements over query ranges support inclusive/exclusive on both sides (defaulting to `TRUE`).
+
+```{r}
+elements_between(seq, from_key = "b", to_key ="c", include_from = TRUE, include_to = TRUE)
+count_between(seq, from_key = "b", to_key = "c", include_from = TRUE, include_to = TRUE)
+
+# exclude "b" keys
+elements_between(seq, from_key = "b", to_key ="c", include_from = FALSE, include_to = TRUE)
+```
+
+
+## Key boundaries, and extrema
+
+`lower_bound()` finds the first element with key `>=` a query key; `upper_bound()` finds the first with key strictly `>`. Both return a list with `$found`, `$index`, `$value`, and `$key` (`NULL` fields when no match exists). Together they support successor queries ("find the nearest entry at or above this key") and duplicate counting via index arithmetic.
+
+```{r}
+seq <- as_ordered_sequence(1:4, keys = c("b", "d", "d", "f"))
+
+lower_bound(seq, key = "d") |> str()
+upper_bound(seq, key = "d") |> str()
+```
+
+When the query key falls between or outside existing keys, `lower_bound()` returns the next entry at or above, useful for nearest-match lookups. Both return `found = FALSE` when no keys satisfy the condition.
+
+```{r}
+lower_bound(seq, key = "a") |> str()
+
+upper_bound(seq, key = "g") |> str()
+```
+
+The difference `upper_bound(x, k)$index - lower_bound(x, k)$index` gives the count of entries with key `k` (this is what `count_key()` does internally).
+
+```{r}
+upper_bound(seq, key = "d")$index - lower_bound(seq, key = "d")$index
+count_key(seq, key = "d")
+```
+
+
+`min_key()` and `max_key()` return the current minimum and maximum *keys* (not the stored elements).
+
+```{r}
+min_key(xs)
+max_key(xs)
+min_key(ordered_sequence())  # NULL when empty
+```
+
+## Empty sequences
+
+Key and range helpers are non-throwing on empty sequences, and `length()` allows for empty checking.
+
+```{r}
+empty_os <- ordered_sequence()
+length(empty_os)
+peek_key(empty_os, 1)
+count_between(empty_os, 1, 5)
+```
+
+## Named ordered sequences
+
+Ordered sequences can carry names, set either at construction or through `as_ordered_sequence()` on a named list. Names and integer positions both support read-only indexing via `[`, `[[`, and `$`. All replacement forms (`[<-`, `[[<-`, `$<-`) error, because
+index-based assignment may break the ordering invariant. Ordered sequences may be cast down with `as_flexseq()` or `as.list()`. Named and unnamed elements cannot be mixed within one sequence.
+
+```{r}
+xs_named <- as_ordered_sequence(
+  setNames(list("alice", "bob", "carol"), c("a", "b", "c")),
+  keys = c(3, 1, 2)
+)
+xs_named
+
+xs_named[["b"]]
+xs_named[c("a", "c")]
+xs_named[1]            # positional read also works
+
+try(xs_named$a <- "!!")  # replacement blocked
+```
+
+## Transforming, aterating, merging
+
+`fapply()` maps a function over elements while preserving keys and order. The function receives `(value, key)`, or `(value, key, name)` if it accepts a third argument. Keys and names are passed in read-only, and the return value replaces the stored element at the associated key (and name if named).
+
+```{r}
+xs_t <- ordered_sequence("alice", "bob", "carol", keys = c(3, 1, 2))
+fapply(xs_t, function(value, key) toupper(value))
+```
+
+`loop()` (re-exported from the **coro** package) walks the sequence in key-ascending order, yielding bare values. Keys are dropped from each yield; use `fapply()` if your callback needs the key alongside the value, or iterate over `as.list()` when you want a list keyed by name.
+
+```{r}
+loop(for (v in xs_t) print(v))
+```
+
+Plain `for (v in xs_t)` (without `loop()`) does *not* dispatch to the iteration protocol, it walks the underlying internal structure and yields those rather than sequence elements. Always wrap with `loop()`.
+
+`merge(x, y)` combines two ordered sequences into a new one in key order, preserving left-biased FIFO on duplicate keys (all of `x`'s entries at a tied key precede `y`'s). The general case runs in O(m + n); when the key ranges are disjoint it collapses to O(log(min(m, n))) via concat.
+
+```{r}
+a <- as_ordered_sequence(c("a1", "a2", "a3"), keys = c(1, 3, 5))
+b <- as_ordered_sequence(c("b1", "b2", "b3"), keys = c(2, 3, 6))
+merge(a, b)
+```
+
+Both sequences must share the same key type and monoid set; mismatches error. Both inputs are left unmodified.
