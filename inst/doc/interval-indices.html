@@ -394,8 +394,9 @@ metadata).</p>
 </div>
 <div id="point-and-interval-queries" class="section level2">
 <h2>Point and interval queries</h2>
-<p><code>peek_point()</code> returns the <em>first</em> (in FIFO order)
-element whose interval contains a query point;
+<p><code>peek_point()</code> returns the <em>first</em> element (in
+canonical interval order — smallest start, with insertion/FIFO order
+breaking ties among equal starts) whose interval contains a query point;
 <code>peek_all_point()</code> returns all matches as an
 <code>interval_index</code> slice.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">peek_point</span>(ix, <span class="at">point =</span> <span class="dv">2</span>)</span>

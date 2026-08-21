@@ -1,8 +1,7 @@
 # Smoke tests for `plot_structure()`. These verify the plotting code
 # executes end-to-end without error across empty / single / small / larger
 # inputs and across each finger-tree-backed structure type — they do NOT
-# verify the rendered output (see vdiffr if visual regression testing is
-# later desired).
+# verify the rendered output.
 
 .plot_to_null <- function(expr) {
   grDevices::pdf(tempfile(fileext = ".pdf"))
