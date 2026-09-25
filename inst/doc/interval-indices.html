@@ -12,7 +12,7 @@
 
 
 
-<title>Interval Indices</title>
+<title>Interval Indices: Overlap and Containment Queries</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -337,7 +337,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">Interval Indices</h1>
+<h1 class="title toc-ignore">Interval Indices: Overlap and Containment
+Queries</h1>
 
 
 
@@ -489,13 +490,13 @@ First we’ll build a new index to query:</p>
 <span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="co">#&gt; [[4]] (interval 4 - 5)</span></span>
 <span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="co">#&gt; [1] &quot;right&quot;</span></span></code></pre></div>
-<p><code>peek_overlaps()</code> returns any interval that shares at
+<p><code>peek_overlapping()</code> returns any interval that shares at
 least one point with the query range. <code>peek_containing()</code>
 returns intervals that fully contain the query range.
 <code>peek_within()</code> returns intervals fully contained by the
 query range.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># overlaps [2, 5]: any shared point</span></span>
-<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="fu">peek_all_overlaps</span>(ix3, <span class="at">start =</span> <span class="dv">2</span>, <span class="at">end =</span> <span class="dv">5</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="fu">peek_all_overlapping</span>(ix3, <span class="at">start =</span> <span class="dv">2</span>, <span class="at">end =</span> <span class="dv">5</span>)</span>
 <span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt; Unnamed interval_index with 4 elements, default query bounds [start, end).</span></span>
 <span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt; Elements (by interval start order):</span></span>
@@ -615,7 +616,7 @@ elements).</p>
 <span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="co">#&gt; [1] 0</span></span>
 <span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="fu">peek_point</span>(empty_ix, <span class="at">point =</span> <span class="dv">1</span>)</span>
 <span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; NULL</span></span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="fu">pop_overlaps</span>(empty_ix, <span class="at">start =</span> <span class="dv">1</span>, <span class="at">end =</span> <span class="dv">5</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="fu">pop_overlapping</span>(empty_ix, <span class="at">start =</span> <span class="dv">1</span>, <span class="at">end =</span> <span class="dv">5</span>)</span>
 <span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co">#&gt; $value</span></span>
 <span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a><span class="co">#&gt; NULL</span></span>
 <span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="co">#&gt; </span></span>
@@ -737,6 +738,89 @@ interval-relation queries work immediately on the result.</p>
 <p>Both indices must share the same endpoint type, the same
 <code>bounds</code> convention, and the same monoid set; mismatches
 error. Both inputs are left unmodified.</p>
+</div>
+<div id="example-hospital-occupancy-over-time" class="section level2">
+<h2>Example: hospital occupancy over time</h2>
+<p>Many datasets are characterized by intervals, such that we wish to
+query which intervals overlap a given point. Sweep-line algorithms do so
+over each start or end point in order. Here we illustrate this basic
+pattern, considering a hypothetical computation of hospital occupancy
+over time. Patients arrive randomly, stay for a random number of days,
+and are associated with demographic variables for age and sex. For each
+day, we wish to capture the total occupancy, average age, and percent
+male. We begin by simulating data and building an interval index storing
+each patient with their stay:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">100</span>)</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>num_days <span class="ot">&lt;-</span> <span class="dv">365</span></span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>n_patients <span class="ot">&lt;-</span> <span class="dv">500</span></span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a></span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>starts <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="dv">1</span><span class="sc">:</span>num_days,</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>                 <span class="at">size =</span> n_patients,</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>                 <span class="at">replace =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a></span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a>ends <span class="ot">&lt;-</span> starts <span class="sc">+</span> <span class="fu">rpois</span>(n_patients, <span class="dv">2</span>) <span class="co"># average stay = 2 days</span></span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a></span>
+<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a>ages <span class="ot">&lt;-</span> <span class="fu">pmax</span>(<span class="dv">0</span>, <span class="fu">rnorm</span>(n_patients, <span class="at">mean =</span> <span class="dv">35</span>, <span class="at">sd =</span> <span class="dv">10</span>))</span>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a>is_males <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), n_patients, <span class="at">replace =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb17-14"><a href="#cb17-14" tabindex="-1"></a></span>
+<span id="cb17-15"><a href="#cb17-15" tabindex="-1"></a><span class="co"># list of patients (each a list with age and is_male)</span></span>
+<span id="cb17-16"><a href="#cb17-16" tabindex="-1"></a>patients <span class="ot">&lt;-</span> <span class="fu">Map</span>(list, <span class="at">age =</span> ages, <span class="at">is_male =</span> is_males)</span>
+<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a></span>
+<span id="cb17-18"><a href="#cb17-18" tabindex="-1"></a><span class="co"># store each patient in an interval index with their stay</span></span>
+<span id="cb17-19"><a href="#cb17-19" tabindex="-1"></a>ix <span class="ot">&lt;-</span> <span class="fu">as_interval_index</span>(patients, <span class="at">start =</span> starts, <span class="at">end =</span> ends)</span></code></pre></div>
+<p>Next, for each day we’ll query for overlapping patients, computing
+summary statistics. These are collected in a <code>flexseq</code>, which
+we later convert to a data frame for further analysis. This example also
+illustrates using <code>fapply()</code> to unpack the contents of an
+interval index containing named lists. Days with no patients present are
+recorded with an occupancy of zero and missing averages.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>day_stats <span class="ot">&lt;-</span> <span class="fu">flexseq</span>()</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a><span class="cf">for</span>(day <span class="cf">in</span> <span class="fu">seq_len</span>(num_days)) {</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>  present <span class="ot">&lt;-</span> <span class="fu">peek_all_point</span>(ix, day)</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>  occupancy <span class="ot">&lt;-</span> <span class="fu">length</span>(present)</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a></span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>  <span class="cf">if</span>(occupancy <span class="sc">==</span> <span class="dv">0</span>) {</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>    stats <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">day =</span> day, <span class="at">occupancy =</span> <span class="dv">0</span>, <span class="at">mean_age =</span> <span class="cn">NA</span>, <span class="at">pct_male =</span> <span class="cn">NA</span>)</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>  } <span class="cf">else</span> {</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a>    day_ages <span class="ot">&lt;-</span> present <span class="sc">|&gt;</span></span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>      <span class="fu">fapply</span>(<span class="cf">function</span>(patient, start, end) {</span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a>        patient<span class="sc">$</span>age</span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a>      }) <span class="sc">|&gt;</span></span>
+<span id="cb18-14"><a href="#cb18-14" tabindex="-1"></a>      <span class="fu">unlist</span>() <span class="co"># fapply returns an interval_index, convert to vector</span></span>
+<span id="cb18-15"><a href="#cb18-15" tabindex="-1"></a></span>
+<span id="cb18-16"><a href="#cb18-16" tabindex="-1"></a>    day_males <span class="ot">&lt;-</span> present <span class="sc">|&gt;</span></span>
+<span id="cb18-17"><a href="#cb18-17" tabindex="-1"></a>      <span class="fu">fapply</span>(<span class="cf">function</span>(patient, start, end) {</span>
+<span id="cb18-18"><a href="#cb18-18" tabindex="-1"></a>        patient<span class="sc">$</span>is_male</span>
+<span id="cb18-19"><a href="#cb18-19" tabindex="-1"></a>      }) <span class="sc">|&gt;</span></span>
+<span id="cb18-20"><a href="#cb18-20" tabindex="-1"></a>      <span class="fu">unlist</span>()</span>
+<span id="cb18-21"><a href="#cb18-21" tabindex="-1"></a></span>
+<span id="cb18-22"><a href="#cb18-22" tabindex="-1"></a>    stats <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">day =</span> day,</span>
+<span id="cb18-23"><a href="#cb18-23" tabindex="-1"></a>                        <span class="at">occupancy =</span> occupancy,</span>
+<span id="cb18-24"><a href="#cb18-24" tabindex="-1"></a>                        <span class="at">mean_age =</span> <span class="fu">mean</span>(day_ages),</span>
+<span id="cb18-25"><a href="#cb18-25" tabindex="-1"></a>                        <span class="at">pct_male =</span> <span class="dv">100</span> <span class="sc">*</span> <span class="fu">mean</span>(day_males))</span>
+<span id="cb18-26"><a href="#cb18-26" tabindex="-1"></a>  }</span>
+<span id="cb18-27"><a href="#cb18-27" tabindex="-1"></a></span>
+<span id="cb18-28"><a href="#cb18-28" tabindex="-1"></a>  day_stats <span class="ot">&lt;-</span> <span class="fu">push_back</span>(day_stats, stats)</span>
+<span id="cb18-29"><a href="#cb18-29" tabindex="-1"></a>}</span>
+<span id="cb18-30"><a href="#cb18-30" tabindex="-1"></a></span>
+<span id="cb18-31"><a href="#cb18-31" tabindex="-1"></a><span class="co"># convert the flexseq of data frames into a single data frame</span></span>
+<span id="cb18-32"><a href="#cb18-32" tabindex="-1"></a><span class="co"># with columns for day, occupancy, mean_age, and pct_male</span></span>
+<span id="cb18-33"><a href="#cb18-33" tabindex="-1"></a>stats_df <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, <span class="fu">as.list</span>(day_stats))</span>
+<span id="cb18-34"><a href="#cb18-34" tabindex="-1"></a><span class="fu">head</span>(stats_df)</span>
+<span id="cb18-35"><a href="#cb18-35" tabindex="-1"></a><span class="co">#&gt;   day occupancy mean_age pct_male</span></span>
+<span id="cb18-36"><a href="#cb18-36" tabindex="-1"></a><span class="co">#&gt; 1   1         2 25.35509       50</span></span>
+<span id="cb18-37"><a href="#cb18-37" tabindex="-1"></a><span class="co">#&gt; 2   2         2 32.05227        0</span></span>
+<span id="cb18-38"><a href="#cb18-38" tabindex="-1"></a><span class="co">#&gt; 3   3         2 25.47594       50</span></span>
+<span id="cb18-39"><a href="#cb18-39" tabindex="-1"></a><span class="co">#&gt; 4   4         5 29.17300       40</span></span>
+<span id="cb18-40"><a href="#cb18-40" tabindex="-1"></a><span class="co">#&gt; 5   5         4 28.38735       50</span></span>
+<span id="cb18-41"><a href="#cb18-41" tabindex="-1"></a><span class="co">#&gt; 6   6         2 26.64759       50</span></span></code></pre></div>
+<p>This example is designed for simplicity, but is not optimally
+efficient. Real sweep-line algorithms consider only sorted used
+endpoints, and keep three indices: one with as-yet-unprocessed elements,
+an active set overlapping the virtual sweep line, and a processed set,
+moving elements through them with <code>pop_all_point()</code>.</p>
 </div>
 
 

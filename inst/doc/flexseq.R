@@ -82,3 +82,42 @@ as.list(x)
 unlist(x)
 length(x)
 
+## -----------------------------------------------------------------------------
+set.seed(100)
+steps <- 1000
+p_arrival <- 0.9
+mean_service <- 1 # service times ~ rpois(1, mean_service) + 1 (real mean 2)
+
+qa <- flexseq(); free_a <- 0
+qb <- flexseq(); free_b <- 0
+waits <- flexseq()
+
+for(t in seq_len(steps)) {
+  # process new arrivals into the shorter queue
+  if(runif(1) < p_arrival) {
+    request <- list(arrival = t)
+    if(length(qa) <= length(qb)) qa <- push_back(qa, request)
+    else                         qb <- push_back(qb, request)
+  }
+
+  # if qa is free, process the front request and record total wait time
+  if(free_a <= t && length(qa) > 0) {
+    nxt <- pop_front(qa)
+    qa <- nxt$remaining    # overwrite queue with remaining portion
+    request <- nxt$value
+    waits <- push_back(waits, t - request$arrival)
+    free_a <- t + rpois(1, mean_service) + 1
+  }
+
+  # if qb is free, process the front request and record total wait time
+  if(free_b <= t && length(qb) > 0) {
+    nxt <- pop_front(qb)
+    qb <- nxt$remaining    # overwrite queue with remaining portion
+    request <- nxt$value
+    waits <- push_back(waits, t - request$arrival)
+    free_b <- t + rpois(1, mean_service) + 1
+  }
+}
+
+mean(unlist(waits))
+

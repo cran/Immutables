@@ -55,7 +55,7 @@ ix <- interval_index("A", "B", "C", start = c(1, 2, 4), end = c(3, 4, 5))
 peek_point(ix, 2)
 
 ## -----------------------------------------------------------------------------
-peek_all_overlaps(ix, start = 2, end = 5)
+peek_all_overlapping(ix, start = 2, end = 5)
 peek_all_containing(ix, start = 2, end = 3)
 peek_all_point(ix, point = 3, match_at = "end")
 

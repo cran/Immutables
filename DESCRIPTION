@@ -4,7 +4,7 @@ Title: Fast and Functional Data Structures
 URL: https://oneilsh.github.io/Immutables/,
         https://github.com/oneilsh/Immutables
 BugReports: https://github.com/oneilsh/Immutables/issues
-Version: 1.1.0
+Version: 1.2.0
 Authors@R: c(
     person(given = "Shawn T.", family = "O'Neil", email = "shawn@tislab.org", role = c("aut", "cre"))
   )
@@ -25,8 +25,8 @@ Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
-Packaged: 2026-08-17 18:33:52 UTC; oneilsh
+Packaged: 2026-09-25 16:33:58 UTC; oneilsh
 Author: Shawn T. O'Neil [aut, cre]
 Maintainer: Shawn T. O'Neil <shawn@tislab.org>
 Repository: CRAN
-Date/Publication: 2026-08-21 17:50:08 UTC
+Date/Publication: 2026-09-25 17:40:09 UTC

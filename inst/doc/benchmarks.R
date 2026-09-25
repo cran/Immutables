@@ -1,12 +1,30 @@
 ## ----setup, include=FALSE-----------------------------------------------------
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 
+# Two run modes, selected by environment variable:
+#   IMMUTABLES_RUN_SLOW=true -> full re-run: all sizes, 10 reps per op. Writes
+#                               the canonical inst/extdata/benchmarks-*.rds and
+#                               paper/figures/benchmarks-*.pdf used by the paper
+#                               (see data-raw/replication/generate_benchmark_figs_slow.R).
+#   (unset)                  -> CRAN / ordinary pkgdown build: load the cached
+#                               results and render plots without re-timing.
+#
+# Results are cached per batch (one .rds per section) so a single section can
+# be re-timed in isolation; each bench chunk writes its own .rds; each plot chunk
+# writes its own .pdf.
+run_benchmarks <- identical(Sys.getenv("IMMUTABLES_RUN_SLOW"), "true")
+
+
 loaded <- tryCatch({
-  pkgload::load_all(quiet = TRUE)
+  # When re-timing, force a fresh optimized (-O2) build: load_all() defaults to
+  # debug = TRUE, which appends -O0, and otherwise reuses any stale objects.
+  pkgload::load_all(quiet = TRUE, debug = FALSE,
+                    recompile = run_benchmarks)
   TRUE
 }, error = function(e) FALSE)
 
 if(!loaded) {
+  if(run_benchmarks) stop("load_all() failed; refusing to benchmark an installed build")
   library(Immutables)
 }
 
@@ -15,16 +33,6 @@ library(bench)
 library(ggplot2)
 library(dplyr)
 
-# Two env-var gates control this vignette:
-#   IMMUTABLES_RUN_SLOW=true       -> re-run all benchmarks and save per-batch
-#                                     results to inst/extdata/benchmarks-*.rds
-# When neither is set (CRAN, ordinary pkgdown build) the vignette loads the
-# cached results and renders plots without re-timing.
-#
-# Results are cached per batch (one .rds per section) so a single section can
-# be re-timed in isolation; each bench chunk writes its own .rds; each plot chunk 
-# writes its own .pdf.
-run_benchmarks <- identical(Sys.getenv("IMMUTABLES_RUN_SLOW"), "true")
 repeats <- 10L
 
 proj_root <- tryCatch(
@@ -55,29 +63,27 @@ bench_one <- function(rows, impl, op, n, repeats, setup, bench) {
   res <- bench::mark(bench(state),
                      min_iterations = repeats,
                      max_iterations = repeats + 0)
+  
+  times <- unlist(res$time[[1]])
 
-  gcs <- res$gc[[1]] # tibble w/ 3 colums; level0, level1, level2
-  gcs$times <- unlist(res$time[[1]])
-  # keeping gc-triggering measures rather than bumping them out
-  #non_gc_times <- gcs |>
-  #  filter(level0 == 0 & level1 == 0 & level2 == 0) |>
-  #  pull(times)
-  gc_times <- gcs |> pull(times)
-
-  push_back(rows, data.frame(impl = impl, op = op, n = n, time_s = gc_times))
+  push_back(rows, data.frame(impl = impl, op = op, n = n, time_s = times))
 }
 
 # Per-batch cache helpers. Each batch is one data.frame persisted to its own
 # file so a single section can be re-benched without touching the others.
 .batch_path <- function(batch) {
-  file.path(proj_root, "inst", "extdata", paste0("benchmarks-", batch, ".rds"))
+  file.path(proj_root, "inst", "extdata",
+            paste0("benchmarks-", batch, ".rds"))
 }
 save_batch <- function(batch) {
   dir.create(file.path(proj_root, "inst", "extdata"),
              showWarnings = FALSE, recursive = TRUE)
   saveRDS(results_list[[batch]], .batch_path(batch))
 }
+# Only re-timing runs write paper figures; ordinary renders (CRAN, pkgdown)
+# would otherwise overwrite them from the cache on every build.
 save_figure <- function(plot, file, width, height) {
+    if(!run_benchmarks) return(invisible(NULL))
     out_dir <- file.path(proj_root, "paper", "figures")
     dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
     ggsave(file.path(out_dir, file), plot, width = width, height = height)
@@ -155,13 +161,12 @@ if(!is.null(results_list$sequence)) {
     ) +
     scale_y_log10(labels = label_time, guide = "axis_logticks") +
     scale_color_manual(values = c("base R" = "#fc8d62", "flexseq" = "#66c2a5")) +
-    #scale_y_continuous(labels = label_time, trans = "log10") +
     theme_bw() +
     theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom")
   print(p_sequence)
   save_figure(p_sequence, "benchmarks-sequence.pdf", width = 9, height = 5)
 } else {
-  knitr::asis_output("*Benchmark results not yet generated. Run `data-raw/generate_publication_results.R` to populate.*")
+  knitr::asis_output("*Benchmark results not yet generated. Run `data-raw/replication/generate_benchmark_figs_slow.R` to populate.*")
 }
 
 ## ----pq-bench, eval=run_benchmarks, cache=FALSE-------------------------------
@@ -360,11 +365,11 @@ if(!is.null(results_list$ordered)) {
 #   rows <- bench_one(rows, "interval_index", "all point matches", n, repeats, ivx_setup,
 #     function(st) peek_all_point(st$ix, qpt, bounds = "[]", as_list = TRUE))
 #   rows <- bench_one(rows, "interval_index", "overlap query", n, repeats, ivx_setup,
-#     function(st) peek_all_overlaps(st$ix, qlo, qhi, bounds = "[]", as_list = TRUE))
+#     function(st) peek_all_overlapping(st$ix, qlo, qhi, bounds = "[]", as_list = TRUE))
 #   rows <- bench_one(rows, "interval_index", "within query", n, repeats, ivx_setup,
 #     function(st) peek_all_within(st$ix, qlo, qhi, bounds = "[]", as_list = TRUE))
 #   rows <- bench_one(rows, "interval_index", "remove by overlap", n, repeats, ivx_setup,
-#     function(st) pop_all_overlaps(st$ix, qlo, qhi, bounds = "[]")$remaining)
+#     function(st) pop_all_overlapping(st$ix, qlo, qhi, bounds = "[]")$remaining)
 # 
 #   rows <- bench_one(rows, "base R", "insert", n, repeats, df_setup,
 #     function(st) list(

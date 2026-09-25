@@ -93,3 +93,62 @@ y <- priority_queue() |>
 as_flexseq(y)
 as_flexseq(as.list(y))
 
+## -----------------------------------------------------------------------------
+set.seed(100)
+n <- 2000
+p <- 25
+X <- matrix(rnorm(n * p), n, p)
+
+# response depends on features 3 and 7 only
+y <- 3.5 * X[, 3] - 4 * X[, 7] + rnorm(n)
+
+## -----------------------------------------------------------------------------
+# a model using no features, initially the "best"
+model <- lm(y ~ 1)
+best_features <- numeric(0)
+best_aic <- AIC(model)
+
+# store the initial model prioritized by its AIC
+pq <- priority_queue()
+pq <- insert(pq, best_features, priority = best_aic)
+
+## -----------------------------------------------------------------------------
+models_considered <- 1
+
+while(length(pq) > 0 && models_considered < 200) {
+  # pop the current best-performing set of features
+  current_best <- pop_min(pq)
+
+  # replace the queue with the remaining (unpopped) portion
+  pq <- current_best$remaining
+
+  # extract the current best features ($value) and AIC ($priority)
+  current_best_features <- current_best$value
+  current_best_aic <- current_best$priority
+
+  # features we can add to the current best for potential improvement
+  available_features <- setdiff(1:ncol(X), current_best_features)
+
+  # add each unused feature one at a time
+  for(available_feature in available_features) {
+    # add it to the set of best-performing features so far
+    selected_features <- c(current_best_features, available_feature)
+
+    # build a model with that updated set
+    model <- lm(y ~ X[ , selected_features, drop = FALSE])
+
+    # add the features to the queue prioritized by the AIC they deliver
+    pq <- insert(pq, selected_features, priority = AIC(model))
+
+    # if the current model is better than the best so far, record it
+    if(AIC(model) < best_aic) {
+      best_features <- selected_features
+      best_aic <- AIC(model)
+    }
+
+    models_considered <- models_considered + 1
+  }
+}
+
+best_features
+

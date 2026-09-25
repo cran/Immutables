@@ -51,7 +51,7 @@ ix3
 
 ## -----------------------------------------------------------------------------
 # overlaps [2, 5]: any shared point
-peek_all_overlaps(ix3, start = 2, end = 5)
+peek_all_overlapping(ix3, start = 2, end = 5)
 
 # containing [3, 4]: index interval must enclose query
 peek_all_containing(ix3, start = 3, end = 4)
@@ -90,7 +90,7 @@ min_endpoint(interval_index())
 empty_ix <- interval_index()
 length(empty_ix)
 peek_point(empty_ix, point = 1)
-pop_overlaps(empty_ix, start = 1, end = 5)
+pop_overlapping(empty_ix, start = 1, end = 5)
 
 ## -----------------------------------------------------------------------------
 ix_named <- as_interval_index(
@@ -117,4 +117,61 @@ a <- as_interval_index(c("A1", "A2"), start = c(1, 5), end = c(4, 8))
 b <- as_interval_index(c("B1", "B2"), start = c(3, 7), end = c(6, 10))
 m <- merge(a, b)
 peek_all_point(m, 3)
+
+## -----------------------------------------------------------------------------
+set.seed(100)
+
+num_days <- 365
+n_patients <- 500
+
+starts <- sample(1:num_days,
+                 size = n_patients,
+                 replace = TRUE)
+
+ends <- starts + rpois(n_patients, 2) # average stay = 2 days
+
+ages <- pmax(0, rnorm(n_patients, mean = 35, sd = 10))
+is_males <- sample(c(0, 1), n_patients, replace = TRUE)
+
+# list of patients (each a list with age and is_male)
+patients <- Map(list, age = ages, is_male = is_males)
+
+# store each patient in an interval index with their stay
+ix <- as_interval_index(patients, start = starts, end = ends)
+
+## -----------------------------------------------------------------------------
+day_stats <- flexseq()
+
+for(day in seq_len(num_days)) {
+  present <- peek_all_point(ix, day)
+  occupancy <- length(present)
+
+  if(occupancy == 0) {
+    stats <- data.frame(day = day, occupancy = 0, mean_age = NA, pct_male = NA)
+  } else {
+    day_ages <- present |>
+      fapply(function(patient, start, end) {
+        patient$age
+      }) |>
+      unlist() # fapply returns an interval_index, convert to vector
+
+    day_males <- present |>
+      fapply(function(patient, start, end) {
+        patient$is_male
+      }) |>
+      unlist()
+
+    stats <- data.frame(day = day,
+                        occupancy = occupancy,
+                        mean_age = mean(day_ages),
+                        pct_male = 100 * mean(day_males))
+  }
+
+  day_stats <- push_back(day_stats, stats)
+}
+
+# convert the flexseq of data frames into a single data frame
+# with columns for day, occupancy, mean_age, and pct_male
+stats_df <- do.call(rbind, as.list(day_stats))
+head(stats_df)
 

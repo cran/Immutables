@@ -12,7 +12,7 @@
 
 
 
-<title>Priority Queues</title>
+<title>Priority Queues: Fast Min/Max Access by Priority</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -337,7 +337,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">Priority Queues</h1>
+<h1 class="title toc-ignore">Priority Queues: Fast Min/Max Access by
+Priority</h1>
 
 
 
@@ -661,6 +662,97 @@ metadata and any custom monoids are dropped. To instead obtain a
 <span id="cb11-43"><a href="#cb11-43" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb11-44"><a href="#cb11-44" tabindex="-1"></a><span class="co">#&gt; $priority</span></span>
 <span id="cb11-45"><a href="#cb11-45" tabindex="-1"></a><span class="co">#&gt; [1] &quot;A&quot;</span></span></code></pre></div>
+</div>
+<div id="example-best-first-feature-selection" class="section level2">
+<h2>Example: best-first feature selection</h2>
+<p>Priority queues have many applications, but we’ll demonstrate
+applying them to the problem of feature selection in modeling: given a
+large number of features, only a few of which are informative, identify
+a small subset with good performance. We begin by constructing a matrix
+<code>X</code> with 25 potential feature columns, and an outcome
+<code>y</code> dependent only on features 3 and 7:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">100</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">2000</span></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>p <span class="ot">&lt;-</span> <span class="dv">25</span></span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>X <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">rnorm</span>(n <span class="sc">*</span> p), n, p)</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co"># response depends on features 3 and 7 only</span></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>y <span class="ot">&lt;-</span> <span class="fl">3.5</span> <span class="sc">*</span> X[, <span class="dv">3</span>] <span class="sc">-</span> <span class="dv">4</span> <span class="sc">*</span> X[, <span class="dv">7</span>] <span class="sc">+</span> <span class="fu">rnorm</span>(n)</span></code></pre></div>
+<p>We’ll consider linear models using only main effects, and use
+Akaike’s Information Criterion (AIC) as a measure of performance. The
+number of potential models (<span class="math inline">\(2^{25}\)</span>)
+is too large to try all possibilities. Rather than iterate feature
+combinations exhaustively, we’ll perform a best-first search: given a
+“current best” set of features, we’ll add remaining features
+individually, evaluating as we go and storing them for potential later
+expansion. By keeping feature sets in a priority queue prioritized by
+resultant AIC, we can select the best-performing set to build on at each
+iteration. We thus begin with a base model using no features, and the
+corresponding empty feature set and AIC stored in a
+<code>priority_queue</code>.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="co"># a model using no features, initially the &quot;best&quot;</span></span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>model <span class="ot">&lt;-</span> <span class="fu">lm</span>(y <span class="sc">~</span> <span class="dv">1</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>best_features <span class="ot">&lt;-</span> <span class="fu">numeric</span>(<span class="dv">0</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>best_aic <span class="ot">&lt;-</span> <span class="fu">AIC</span>(model)</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co"># store the initial model prioritized by its AIC</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>pq <span class="ot">&lt;-</span> <span class="fu">priority_queue</span>()</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>pq <span class="ot">&lt;-</span> <span class="fu">insert</span>(pq, best_features, <span class="at">priority =</span> best_aic)</span></code></pre></div>
+<p>So long as there are feature sets available in the queue to expand
+on, we will do so, but limit the total number of considered models to
+approximately 200 to prevent an exhaustive search. At each iteration we
+pop the best feature set considered so far and compute the remaining
+available features. We then add each of those to the current best set in
+turn, resulting in a new model with corresponding AIC to add to the
+queue. If one of these performs better than the best so far we record
+it. Along the way we update the number of models considered.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>models_considered <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="cf">while</span>(<span class="fu">length</span>(pq) <span class="sc">&gt;</span> <span class="dv">0</span> <span class="sc">&amp;&amp;</span> models_considered <span class="sc">&lt;</span> <span class="dv">200</span>) {</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="co"># pop the current best-performing set of features</span></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>  current_best <span class="ot">&lt;-</span> <span class="fu">pop_min</span>(pq)</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="co"># replace the queue with the remaining (unpopped) portion</span></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>  pq <span class="ot">&lt;-</span> current_best<span class="sc">$</span>remaining</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>  <span class="co"># extract the current best features ($value) and AIC ($priority)</span></span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>  current_best_features <span class="ot">&lt;-</span> current_best<span class="sc">$</span>value</span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a>  current_best_aic <span class="ot">&lt;-</span> current_best<span class="sc">$</span>priority</span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a>  <span class="co"># features we can add to the current best for potential improvement</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a>  available_features <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="dv">1</span><span class="sc">:</span><span class="fu">ncol</span>(X), current_best_features)</span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a>  <span class="co"># add each unused feature one at a time</span></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a>  <span class="cf">for</span>(available_feature <span class="cf">in</span> available_features) {</span>
+<span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a>    <span class="co"># add it to the set of best-performing features so far</span></span>
+<span id="cb14-20"><a href="#cb14-20" tabindex="-1"></a>    selected_features <span class="ot">&lt;-</span> <span class="fu">c</span>(current_best_features, available_feature)</span>
+<span id="cb14-21"><a href="#cb14-21" tabindex="-1"></a></span>
+<span id="cb14-22"><a href="#cb14-22" tabindex="-1"></a>    <span class="co"># build a model with that updated set</span></span>
+<span id="cb14-23"><a href="#cb14-23" tabindex="-1"></a>    model <span class="ot">&lt;-</span> <span class="fu">lm</span>(y <span class="sc">~</span> X[ , selected_features, <span class="at">drop =</span> <span class="cn">FALSE</span>])</span>
+<span id="cb14-24"><a href="#cb14-24" tabindex="-1"></a></span>
+<span id="cb14-25"><a href="#cb14-25" tabindex="-1"></a>    <span class="co"># add the features to the queue prioritized by the AIC they deliver</span></span>
+<span id="cb14-26"><a href="#cb14-26" tabindex="-1"></a>    pq <span class="ot">&lt;-</span> <span class="fu">insert</span>(pq, selected_features, <span class="at">priority =</span> <span class="fu">AIC</span>(model))</span>
+<span id="cb14-27"><a href="#cb14-27" tabindex="-1"></a></span>
+<span id="cb14-28"><a href="#cb14-28" tabindex="-1"></a>    <span class="co"># if the current model is better than the best so far, record it</span></span>
+<span id="cb14-29"><a href="#cb14-29" tabindex="-1"></a>    <span class="cf">if</span>(<span class="fu">AIC</span>(model) <span class="sc">&lt;</span> best_aic) {</span>
+<span id="cb14-30"><a href="#cb14-30" tabindex="-1"></a>      best_features <span class="ot">&lt;-</span> selected_features</span>
+<span id="cb14-31"><a href="#cb14-31" tabindex="-1"></a>      best_aic <span class="ot">&lt;-</span> <span class="fu">AIC</span>(model)</span>
+<span id="cb14-32"><a href="#cb14-32" tabindex="-1"></a>    }</span>
+<span id="cb14-33"><a href="#cb14-33" tabindex="-1"></a></span>
+<span id="cb14-34"><a href="#cb14-34" tabindex="-1"></a>    models_considered <span class="ot">&lt;-</span> models_considered <span class="sc">+</span> <span class="dv">1</span></span>
+<span id="cb14-35"><a href="#cb14-35" tabindex="-1"></a>  }</span>
+<span id="cb14-36"><a href="#cb14-36" tabindex="-1"></a>}</span>
+<span id="cb14-37"><a href="#cb14-37" tabindex="-1"></a></span>
+<span id="cb14-38"><a href="#cb14-38" tabindex="-1"></a>best_features</span>
+<span id="cb14-39"><a href="#cb14-39" tabindex="-1"></a><span class="co">#&gt; [1]  7  3 22 21 25  2 17  6</span></span></code></pre></div>
+<p>The best model encountered by AIC includes the two informative
+features, 7 and 3, along with several noise features that each improve
+AIC slightly. Potential improvements to this example include ordering
+features to avoid duplicated testing of feature permutations, more
+sophisticated stopping criteria based on AIC trend, and alternative
+prioritization values. The search history can also easily be inspected
+efficiently by growing a <code>flexseq</code> with intermediate
+information.</p>
 </div>
 
 

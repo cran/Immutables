@@ -12,7 +12,7 @@
 
 
 
-<title>Immutables</title>
+<title>Immutables: Fast, Persistent Data Structures for R</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -337,7 +337,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">Immutables</h1>
+<h1 class="title toc-ignore">Immutables: Fast, Persistent Data
+Structures for R</h1>
 
 
 
@@ -576,7 +577,7 @@ order:</p>
 <span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;A&quot;</span></span></code></pre></div>
 <p>Interval-relation queries (overlap, containment), plus sweep-line
 endpoint matches via <code>match_at</code>:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">peek_all_overlaps</span>(ix, <span class="at">start =</span> <span class="dv">2</span>, <span class="at">end =</span> <span class="dv">5</span>)</span>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">peek_all_overlapping</span>(ix, <span class="at">start =</span> <span class="dv">2</span>, <span class="at">end =</span> <span class="dv">5</span>)</span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="co">#&gt; Unnamed interval_index with 3 elements, default query bounds [start, end).</span></span>
 <span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="co">#&gt; Elements (by interval start order):</span></span>
